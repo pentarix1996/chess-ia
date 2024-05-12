@@ -47,7 +47,7 @@ class ChessEnvironment:
 
         # Recompensa por poner en jaque
         if self.board.is_check():
-            reward += 5
+            reward += 10
 
         if move.promotion:
             reward += 100.0  # Recompensa adicional por la promoción
@@ -61,27 +61,27 @@ class ChessEnvironment:
         elif (self.board.is_stalemate() or self.board.is_insufficient_material()
                 or self.board.is_seventyfive_moves() or self.board.is_fivefold_repetition()):
             print("Empate")
-            reward -= 250
+            reward -= 500
             done = 2
         
         return self.get_state(), reward, done
 
     def get_state(self):
-        state = np.zeros((8, 8, 12))
+        state = np.zeros((8, 8))
 
         for i in range(64):
             piece = self.board.piece_at(i)
 
             if piece:
-                color = int(piece.color)  # 0 para blanco, 1 para negro
-                piece_type = piece.piece_type - 1  # Restamos 1 porque los tipos de piezas van de 1 a 6 en python-chess
+                color = int(piece.color)  # 1 para blanco, 0 para negro
+                piece_type = piece.piece_type # Restamos 1 porque los tipos de piezas van de 1 a 6 en python-chess
 
                 layer = color * 6 + piece_type  # Calculamos la capa correcta para cada tipo de pieza y color
 
                 row = i // 8
                 col = i % 8
 
-                state[row, col, layer] = 1
+                state[row, col] = layer
 
         return state
 
@@ -95,54 +95,66 @@ class ChessAgent:
         self.gamma = 0.95  # Factor de descuento para las recompensas futuras
         self.epsilon = 1.0  # Valor inicial de ε para la política ε-greedy
         self.epsilon_decay = 0.995  # Factor de decaimiento para ε
-        self.min_epsilon = 0.01
+        self.min_epsilon = 0.09
 
     @tf.function
     def fast_predict(self, state):
         return self.model(state)
 
-    def get_action(self, state, board):
-        # Predicciones del modelo para el estado actual
-        action_probs = self.fast_predict(state[None, :, :, :]).numpy()
-
-        # Obtener movimientos legales del juego de ajedrez actual
-        legal_moves = list(board.legal_moves)
-        legal_actions = [move.from_square * 64 + move.to_square for move in legal_moves]
-
-        legal_action_probs = action_probs[0, legal_actions]
-
-        if np.random.rand() < self.epsilon:
-            # Exploración: elige una acción aleatoria de las legales
-            action = np.random.choice(legal_actions)
-        else:
-            # Explotación: elige la acción con la probabilidad más alta de las legales
-            action = legal_actions[np.argmax(legal_action_probs)]
+    def predict(self, state, board):
+        breakpoint()
+        action_probs = self.fast_predict(state[None, None, :, :]).numpy().flatten()
         
-        # Decrementa epsilon para reducir la exploración a medida que el modelo aprende
-        if self.epsilon > self.min_epsilon:
-            self.epsilon *= self.epsilon_decay
+        legal_moves = list(board.legal_moves)
+        # TODO Comprobar como se relacionan las jugadas con las probabilidades
+        legal_actions = [move.from_square * 64 + move.to_square for move in legal_moves]
+        filtered_probs = np.zeros_like(action_probs)
+
+        for action in legal_actions:
+            if action < len(action_probs):
+                filtered_probs[action] = action_probs[action]
+
+        action = None
 
         return action
 
-    # def get_action(self, state, board):
-    #     # Usa la red neuronal para seleccionar el próximo movimiento
-    #     action_probs = self.fast_predict(state[None, :, :, :]).numpy()
-
+    # def predict(self, state, board):
+    #     # Obtener predicciones del modelo para el estado actual
+    #     action_probs = self.fast_predict(state[None, None, :, :]).numpy().flatten()
+        
+    #     # Lista de movimientos legales
     #     legal_moves = list(board.legal_moves)
+    #     if not legal_moves:
+    #         return None  # No hay movimientos legales, manejar adecuadamente
+
+    #     # Convertir movimientos legales en índices de acciones
     #     legal_actions = [move.from_square * 64 + move.to_square for move in legal_moves]
 
-    #     # Filtra las probabilidades de acción para que solo contengan las acciones legales
-    #     legal_action_probs = action_probs[0, legal_actions]
+    #     # Filtrar y normalizar las probabilidades para solo incluir acciones legales
+    #     filtered_probs = np.zeros_like(action_probs)
+    #     for action in legal_actions:
+    #         if action < len(action_probs):
+    #             filtered_probs[action] = action_probs[action]
 
+    #     # Normalizar las probabilidades
+    #     sum_probs = np.sum(filtered_probs)
+    #     if sum_probs > 0:
+    #         normalized_probs = filtered_probs / sum_probs
+    #     else:
+    #         # Si la suma de las probabilidades es 0, seleccionar uniformemente
+    #         normalized_probs = np.zeros_like(filtered_probs)
+    #         normalized_probs[legal_actions] = 1.0 / len(legal_actions)
+
+    #     # Reducir epsilon y seleccionar acción
     #     if np.random.rand() < self.epsilon:
-    #         # Elige una acción aleatoria
+    #         # Exploración: seleccionar al azar entre las acciones legales
     #         action = np.random.choice(legal_actions)
     #     else:
-    #         # Elige la acción que maximiza la recompensa
-    #         action = legal_actions[np.argmax(legal_action_probs)]
+    #         # Explotación: seleccionar la acción con la mayor probabilidad ajustada
+    #         action = legal_actions[np.argmax(normalized_probs[legal_actions])]
 
-    #     # Decrementa ε después de cada acción
-    #     if self.epsilon > 0.01:  # Límite mínimo para ε
+    #     # Actualiza epsilon después de explorar
+    #     if self.epsilon > self.min_epsilon:
     #         self.epsilon *= self.epsilon_decay
 
     #     return action
@@ -156,14 +168,8 @@ class ChessAgent:
 
         minibatch = random.sample(self.memory, batch_size)  # Entrenar con muestras aleatorias
 
-        # # Convertir las experiencias almacenadas en matrices numpy
-        # states = np.array([exp[0] for exp in self.memory])
-        # actions = np.array([exp[1] for exp in self.memory])
-        # rewards = np.array([exp[2] for exp in self.memory])
-        # next_states = np.array([exp[3] for exp in self.memory])
-        # dones = np.array([exp[4] for exp in self.memory])
-
         # Desempaquetar las experiencias
+        breakpoint()
         states, actions, rewards, next_states, dones = zip(*minibatch)
         states = np.array(states)
         next_states = np.array(next_states)
@@ -188,49 +194,12 @@ class ChessAgent:
         # Usa one-hot encoding para convertir los índices de acción en vectores de clasificación
         one_hot_actions = tf.keras.utils.to_categorical(actions, num_classes=4096)
 
+        breakpoint()
         # Entrena el modelo en el minibatch. Aquí utilizamos 'categorical_crossentropy'
-        history = self.model.fit(states, one_hot_actions * target_qs, epochs=5, verbose=0)
+        history = self.model.fit(states, one_hot_actions * target_qs, epochs=15, verbose=1)
         
         # Reduce epsilon
         if self.epsilon > 0.01:
             self.epsilon *= self.epsilon_decay
 
         return history
-
-        # # Calcular los targets Q para todas las experiencias
-        # targets = self.fast_predict(states).numpy()
-
-        # Q_future = np.amax(self.fast_predict(next_states).numpy(), axis=1)
-        # targets[np.arange(len(actions)), actions] = rewards + Q_future * self.gamma * (1 - dones)
-
-        # Entrenar el modelo con el conjunto completo de datos
-        # history = self.model.fit(states, targets, epochs=15)
-
-        # return history
-
-    # def old_train(self, batch_size):
-    #     # Tomamos una muestra aleatoria de las experiencias pasadas
-    #     minibatch = random.sample(self.memory, batch_size)
-
-    #     # Creamos arrays numpy para las experiencias
-    #     states = np.array([experience[0] for experience in minibatch])
-    #     actions = np.array([experience[1] for experience in minibatch])
-    #     rewards = np.array([experience[2] for experience in minibatch])
-    #     next_states = np.array([experience[3] for experience in minibatch])
-    #     dones = np.array([experience[4] for experience in minibatch])
-
-    #     # Calculamos los valores Q actuales y futuros
-    #     current_qs = self.model.predict(states, verbose=0)
-    #     future_qs = self.model.predict(next_states, verbose=0)
-
-    #     # Actualizamos los valores Q para las acciones tomadas
-    #     for i in range(batch_size):
-    #         if dones[i]:
-    #             current_qs[i][actions[i]] = rewards[i]
-    #         else:
-    #             current_qs[i][actions[i]] = rewards[i] + self.gamma * np.max(future_qs[i])
-
-    #     # Entrenamos el modelo en el minibatch
-    #     history = self.model.fit(states, current_qs, epochs=15)
-
-    #     return history

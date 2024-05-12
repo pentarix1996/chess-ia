@@ -112,16 +112,16 @@ class DisplayThread(threading.Thread):
                     if event.type == pygame.QUIT:
                         self._running = False
                 if not self.board.is_game_over():
-                    reward = 0
-                    state = self.get_state()
+                    #reward = 0
 
-                    while reward <= 0:
-                        action = self._agent.get_action(state, self.board)
-                        next_state, reward, done = self.ia_step(action)
-                        self._agent.remember(state, action, reward, next_state, done)
+                    # while reward <= 0:
+                    #     action = self._agent.get_action(state, self.board)
+                    #     _, reward, done = self.ia_step(action)
 
-                        if done:
-                            break
+                    #     if done:
+                    #         break
+                    action = self._agent.predict(self.board)
+                    self.board.push(action)
 
                     if self.board.is_game_over():
                         self._game_over = True

@@ -1,3 +1,9 @@
-chess>=1.9.0
-chess-board>=0.3.1
-tensorflow>=2.16.1
+chess>=1.9.0,<2.0.0
+chess-board>=0.3.1,<1.0.0
+tensorflow>=2.16.1,<3.0.0
+stockfish>=3.28.0,<4.0.0
+gym-chess>=0.1.1,<1.0.0
+torch
+torchvision
+torchaudio
+tdqm

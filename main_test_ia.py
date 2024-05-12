@@ -1,11 +1,10 @@
 import chess
 import tensorflow as tf
-import os
 
 from level3.ia_level import ChessEnvironment, ChessAgent
 
 
-EPISODES = 501
+EPISODES = 3
 
 
 # def create_model():
@@ -21,12 +20,12 @@ EPISODES = 501
 
 def create_model():
     model = tf.keras.Sequential([
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same', input_shape=(8, 8, 12)),
-        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same', data_format='channels_first', input_shape=(1, 8, 8)),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same', data_format='channels_first'),
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same', data_format='channels_first'),
         tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(256, activation='relu'),
-        tf.keras.layers.Dense(4096, activation='softmax')  # 4096 outputs to represent all possible moves
+        tf.keras.layers.Dense(512, activation='relu'),
+        tf.keras.layers.Dense(4096, activation='softmax')
     ])
     model.compile(optimizer='adam', loss='categorical_crossentropy')  # Using categorical_crossentropy for a better gradient performance
     return model
@@ -57,9 +56,9 @@ def main():
         total_reward1 = 0
         total_reward2 = 0
 
-        while not done:
+        for time in range(500):
             # Agent 1 plays
-            action = agent1.get_action(state, env.board)
+            action = agent1.predict(state, env.board)
             next_state, reward1, done = env.step(action)
             total_reward1 += reward1
             agent1.remember(state, action, reward1, next_state, done)
@@ -76,7 +75,7 @@ def main():
                 break
 
             # Agent 2 plays
-            action = agent2.get_action(state, env.board)
+            action = agent2.predict(state, env.board)
             next_state, reward2, done = env.step(action)
             total_reward2 += reward2
             agent2.remember(state, action, reward2, next_state, done)
@@ -91,48 +90,20 @@ def main():
                     reward1 -= reward2
                 agent1.remember(state, action, reward1, next_state, done)
 
-        # for time in range(500):
-        #     # El agente 1 juega
-        #     action = agent1.get_action(state, env.board)
-        #     next_state, reward1, done = env.step(action)
-        #     total_reward1 += reward1
-        #     agent1.remember(state, action, reward1, next_state, done)
-        #     state = next_state
-
-        #     if done:
-        #         if done == 2:
-        #             total_reward2 += reward1
-        #             reward2 = reward1
-        #             agent2.remember(state, action, reward2, next_state, done)
-        #         break
-
-        #     # El agente 2 juega
-        #     action = agent2.get_action(state, env.board)
-        #     next_state, reward2, done = env.step(action)
-        #     total_reward2 += reward2
-        #     agent2.remember(state, action, reward2, next_state, done)
-        #     state = next_state
-
-        #     if done:
-        #         if done == 2:
-        #             total_reward1 += reward2
-        #             reward1 = reward2
-        #             agent1.remember(state, action, reward1, next_state, done)
-        #         break
-
-        # print(f"Episodio: {episode+1}/{EPISODES}, Turno: {time+1}, Recompensa total agente1: {total_reward1}, Recompensa total agente2: {total_reward2}")
-        print(f"Episodio: {episode+1}/{EPISODES}, Recompensa total agente1: {total_reward1}, Recompensa total agente2: {total_reward2}")
+        print(f"Episodio: {episode+1}/{EPISODES}, Turno: {time+1}, Recompensa total agente1: {total_reward1}, Recompensa total agente2: {total_reward2}")
+        #print(f"Episodio: {episode+1}/{EPISODES}, Recompensa total agente1: {total_reward1}, Recompensa total agente2: {total_reward2}")
 
 
-        # Cada 500 partidas guardamos los modelos de los agentes
-        if episode % 500 == 0 and episode != 0:
-            # Entrenamos a los agentes con la memoria acumulada
-            print("Entrenando modelos...")
-            agent1.train()
-            agent2.train()
-            
-            agent1.model.save(f'model_{episode}_WHITE.h5')
-            agent2.model.save(f'model_{episode}_BLACK.h5')
+    # Cada EPISODES partidas guardamos los modelos de los agentes
+    breakpoint()
+    if episode % 2 == 0 and episode != 0:
+        # Entrenamos a los agentes con la memoria acumulada
+        print("Entrenando modelos...")
+        agent1.train()
+        agent2.train()
+        
+        agent1.model.save(f'model_{episode}_WHITE.h5')
+        agent2.model.save(f'model_{episode}_BLACK.h5')
 
 
 if __name__ == "__main__":
